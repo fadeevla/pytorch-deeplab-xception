@@ -3,23 +3,26 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-from mypath import Path
-from dataloaders import make_data_loader
-from modeling.sync_batchnorm.replicate import patch_replication_callback
-from modeling.deeplab import *
-from utils.loss import SegmentationLosses
-from utils.calculate_weights import calculate_weigths_labels
-from utils.lr_scheduler import LR_Scheduler
-from utils.saver import Saver
-from utils.summaries import TensorboardSummary
-from utils.metrics import Evaluator
+from external.mypath import Path
+from external.dataloaders import make_data_loader
+from external.modeling.sync_batchnorm.replicate import patch_replication_callback
+from external.modeling.deeplab import *
+from external.utils.loss import SegmentationLosses
+from external.utils.calculate_weights import calculate_weigths_labels
+from external.utils.lr_scheduler import LR_Scheduler
+from external.utils.saver import Saver
+from external.utils.summaries import TensorboardSummary
+from external.utils.metrics import Evaluator
 
 class Trainer(object):
+    def make_data_loader(self, args, **kwargs):
+        return make_data_loader(args, **kwargs)
     def __init__(self, args):
         self.args = args
 
         # Define Saver
         self.saver = Saver(args)
+        
         self.saver.save_experiment_config()
         # Define Tensorboard Summary
         self.summary = TensorboardSummary(self.saver.experiment_dir)
@@ -27,7 +30,7 @@ class Trainer(object):
         
         # Define Dataloader
         kwargs = {'num_workers': args.workers, 'pin_memory': True}
-        self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
+        self.train_loader, self.val_loader, self.test_loader, self.nclass = self.make_data_loader(args, **kwargs)
 
         # Define network
         model = DeepLab(num_classes=self.nclass,
@@ -96,7 +99,7 @@ class Trainer(object):
         tbar = tqdm(self.train_loader)
         num_img_tr = len(self.train_loader)
         for i, sample in enumerate(tbar):
-            image, target = sample['image'], sample['label']
+            image, target = sample[0], sample[1]
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             self.scheduler(self.optimizer, i, epoch, self.best_pred)
@@ -112,7 +115,8 @@ class Trainer(object):
             # Show 10 * 3 inference results each epoch
             if i % (num_img_tr // 10) == 0:
                 global_step = i + num_img_tr * epoch
-                self.summary.visualize_image(self.writer, self.args.dataset, image, target, output, global_step)
+                #self.summary.visualize_image(self.writer, self.args.dataset, image, target, output, global_step)
+                print('global_step=', global_step)
 
         self.writer.add_scalar('train/total_loss_epoch', train_loss, epoch)
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + image.data.shape[0]))
@@ -135,7 +139,7 @@ class Trainer(object):
         tbar = tqdm(self.val_loader, desc='\r')
         test_loss = 0.0
         for i, sample in enumerate(tbar):
-            image, target = sample['image'], sample['label']
+            image, target = sample[0], sample[1]
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
@@ -246,6 +250,11 @@ def main():
                         help='evaluuation interval (default: 1)')
     parser.add_argument('--no-val', action='store_true', default=False,
                         help='skip validation during training')
+    #azure ml specific
+    parser.add_argument('--data-folder', type=str, default = None,
+                        help="Dataset folder (default: None)")
+    parser.add_argument('--model-name', type=str, default = None,
+                        help="Name of AzureML service model")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

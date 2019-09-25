@@ -7,19 +7,28 @@ import glob
 class Saver(object):
 
     def __init__(self, args):
-        self.args = args
-        self.directory = os.path.join('run', args.dataset, args.checkname)
+        self.args = args        
         self.runs = sorted(glob.glob(os.path.join(self.directory, 'experiment_*')))
-        run_id = int(self.runs[-1].split('_')[-1]) + 1 if self.runs else 0
-
-        self.experiment_dir = os.path.join(self.directory, 'experiment_{}'.format(str(run_id)))
+        self.checkpoint_path = None
+        
+        print('init experiment dir',self.experiment_dir)
         if not os.path.exists(self.experiment_dir):
             os.makedirs(self.experiment_dir)
-
+    @property
+    def run_id(self):
+        return int(self.runs[-1].split('_')[-1]) + 1 if self.runs else 0
+    @property
+    def experiment_dir(self):
+        return os.path.join(self.directory, 'experiment_{}'.format(str(self.run_id)))
+    @property
+    def directory(self):
+        return os.path.join(self.args.outputs_dir , self.args.dataset, self.args.checkname)
     def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
         """Saves checkpoint to disk"""
         filename = os.path.join(self.experiment_dir, filename)
+        print('inside saver.py:save_checkpoint saving checkpoint filename=', filename)
         torch.save(state, filename)
+        self.checkpoint_path = filename
         if is_best:
             best_pred = state['best_pred']
             with open(os.path.join(self.experiment_dir, 'best_pred.txt'), 'w') as f:
