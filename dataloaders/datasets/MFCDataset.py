@@ -13,6 +13,7 @@ import sys
 seed = random.randrange(sys.maxsize)
 
 class MFCDataset(Dataset):
+    
     def _listdir(self, dirpath):
         print('dir_path=',dirpath)
         ll = (os.getcwd(), os.listdir())
@@ -27,7 +28,7 @@ class MFCDataset(Dataset):
        
         self.datapoints = [os.path.splitext(x)[0] for x in self._listdir(join(root, "image"))]
         self.endings = [os.path.splitext(x)[1] for x in self._listdir(join(root, "image"))]
-        self.NUM_CLASSES = len(self.datapoints)
+        self.NUM_CLASSES = 2
         transforms = self.get_transforms()
 
         if img_transform is None:
